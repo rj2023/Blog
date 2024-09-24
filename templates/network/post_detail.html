@@ -1,0 +1,171 @@
+{% extends "network/layout.html" %}
+{% load static %}
+
+{% block body %}
+<div class="container mt-4">
+    <div class="card mt-3">
+        <div class="card-body">
+            <h2 class="article-title">{{ post.title }}</h2>
+
+            <!-- Post image -->
+            {% if post.image %}
+            <img src="{{ post.image.url }}" alt="{{ post.title }}" style="width:100%; height:auto;">
+            {% else %}
+            <img src="{% static 'images/images.jpg' %}" alt="default image" style="width:100%; height:auto;">
+            {% endif %}
+
+            <p class="article-info">{{ post.created_at }} | {{ post.comments.all.count }} comments     
+                <a href="{% url 'profile' post.author.id %}"><span class="font-weight-bold">by: {{ post.author.username }}</span></a>
+            </p>
+
+            <div class="article-body">
+                <p>{{ post.content|safe }}</p>
+            </div>
+
+            <!-- Share post functionality -->
+            <div onclick="openEmailPrompt('{{ request.build_absolute_uri }}', {{ post.id }})" style="width:auto; text-align: right">
+                <i class="fas fa-share-alt pointer"></i>
+            </div>
+
+            <!-- Like and comment functionality for authenticated users -->
+            {% if request.user.is_authenticated %}
+            <button class="like-unlike-btn" data-post-id="{{ post.id }}" style="color:red; border-radius:7px;">
+                <i class="fa fa-heart" aria-hidden="true"></i> {{ post.get_like_count }}
+            </button>
+              <!-- Email prompt for sharing the post -->
+            <div id="emailPrompt" style="display:none;margin-top:5px">
+                <input type="email" id="recipientEmail" placeholder="Enter recipient's email" />
+                <button class="btn btn-primary" onclick="sendEmail('{{ post.id }})">Send Email</button>
+                <button class="btn btn-danger" onclick="closeEmailPrompt()">Cancel</button>
+            </div>
+
+            <form class="comment-form mt-2" data-post-id="{{ post.id }}">
+                <textarea class="form-control" name="comment" rows="2" placeholder="Add a comment..." required></textarea>
+                <button class="btn btn-primary mt-2" type="submit" style="width:100px;">Comment</button>
+            </form>
+
+            <div class="comments-section" data-post-id="{{ post.id }}">
+                {% for comment in post.comments.all %}
+                <div class="comment" id="comment-{{ comment.id }}">
+                    <strong>{{ comment.user.username }}:</strong> {{ comment.content }}
+                    <small class="text-muted">({{ comment.created_at|date:"Y-m-d H:i:s" }})</small>
+
+                    <div class="like-comment-btn" data-comment-id="{{ comment.id }}" style="color: red; cursor: pointer; text-align:right">
+                        <i class="fa fa-heart" aria-hidden="true"></i> {{ comment.commentlike_set.count }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+          
+        </div>
+    </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+
+   
+    $(document).ready(function () {
+        // Handle post like/unlike
+        $(".like-unlike-btn").click(function () {
+            const post_id = $(this).data("post-id");
+            $.ajax({
+                type: "POST",
+                url: "{% url 'like_unlike_post' %}",
+                data: { post_id: post_id, csrfmiddlewaretoken: '{{ csrf_token }}' },
+                dataType: "json",
+                success: function (data) {
+                    $(".like-unlike-btn[data-post-id='" + post_id + "']").html('<i class="fa fa-heart"></i> ' + data.likes_count);
+                }
+            });
+        });
+
+        // Handle comment like
+        $(document).on("click", ".like-comment-btn", function () {
+            const comment_id = $(this).data("comment-id");
+            const div = $(this);
+            $.ajax({
+                type: "POST",
+                url: "{% url 'like_comment' %}",
+                data: { comment_id: comment_id, csrfmiddlewaretoken: '{{ csrf_token }}' },
+                dataType: "json",
+                success: function (data) {
+                    div.html('<i class="fa fa-heart"></i> ' + data.like_count);
+                }
+            });
+        });
+
+        // Handle comment submission
+        $(".comment-form").submit(function (event) {
+            event.preventDefault();
+            const postId = $(this).data("post-id");
+            const commentText = $(this).find("textarea[name='comment']").val();
+            const commentForm = $(this);
+            $.ajax({
+                type: "POST",
+                url: "{% url 'add_comment' %}",
+                data: { post_id: postId, comment: commentText, csrfmiddlewaretoken: '{{ csrf_token }}' },
+                dataType: "json",
+                success: function (data) {
+                    if (data.success) {
+                        const commentsSection = $(".comments-section[data-post-id='" + postId + "']");
+                        const newComment = `
+                            <div class="comment">
+                                <strong>${data.user}:</strong> ${data.comment}
+                                <small class="text-muted">(${data.created_at})</small>
+                                <div class="like-comment-btn" data-comment-id=" ${data.id}" style="color: red; cursor: pointer; text-align:right">
+                                    <i class="fa fa-heart" aria-hidden="true"></i> ${data.like_count}
+                                </div>
+                            </div>`;
+                        commentsSection.append(newComment);
+                        commentForm[0].reset();  // Clear the comment form
+                    }
+                }
+            });
+        });
+    });
+
+    // Open email prompt
+    function openEmailPrompt(postUrl) {
+        const emailPrompt = document.getElementById('emailPrompt');
+        emailPrompt.style.display = (emailPrompt.style.display === 'block') ? 'none' : 'block';
+        window.currentPostUrl = postUrl;  // Store the post URL for later use
+    }
+
+    // Close email prompt
+    function closeEmailPrompt() {
+        document.getElementById('emailPrompt').style.display = 'none';
+    }
+
+    // Send email with the post link
+    function sendEmail(id) {
+        const email = document.getElementById('recipientEmail').value;
+        if (!email) {
+            alert("Please enter a valid email address.");
+            return;
+        }
+        fetch(`/post/${id}/share/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ email: email })
+        }).then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("Email sent successfully!");
+                closeEmailPrompt();
+            } else {
+                alert("Error sending email: " + data.message);
+            }
+        }).catch(error => {
+            console.error('Error:', error);
+            alert("An error occurred. Please try again.");
+        });
+    }
+   
+</script>
+
+{% endblock %}
