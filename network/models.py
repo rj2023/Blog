@@ -1,7 +1,5 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from django.db import models
-from django.contrib.auth.models import User
 from django.utils import timezone
 from tinymce.models import HTMLField
 from taggit.managers import TaggableManager 

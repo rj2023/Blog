@@ -26,6 +26,7 @@ porter_stemmer = PorterStemmer()
 
 @csrf_exempt
 def register(request):
+    """Register a new user."""
     if request.method == "POST":
         email = request.POST["email"]
         password = request.POST["password"]
@@ -50,6 +51,7 @@ def register(request):
 
 @csrf_exempt
 def login_view(request):
+    """Log in an existing user."""
     if request.method == "POST":
         username = request.POST["username"]
         password = request.POST["password"]
@@ -68,6 +70,7 @@ def login_view(request):
 
 @csrf_exempt
 def index(request):
+    """Display all posts, paginated."""
     posts = Post.objects.all().order_by('-created_at')
     paginator = Paginator(posts, 5)
     page_number = request.GET.get("page")
@@ -81,8 +84,8 @@ def index(request):
 
 
 def post_detail(request, post_id):
+    """Display the details of a single post."""
     post = get_object_or_404(Post, id=post_id)
-    print(post.get_like_count())
     return render(request, 'network/post_detail.html', {'post': post})
 
 def generate_trigrams(text):
@@ -98,6 +101,7 @@ def generate_trigrams(text):
 
 @login_required
 def search_results(request):
+    """Search for posts by content or tags."""
     search_query = request.GET.get('search', '')  # Default to empty string if not found
     word_list = [word + ' ' for word in search_query.split()]
 
@@ -141,6 +145,7 @@ def search_results(request):
 
 @login_required
 def add_comment(request):
+    """Add a comment to a post."""
     if request.method == 'POST':
         post_id = request.POST.get('post_id')
         comment_text = request.POST.get('comment')
@@ -150,8 +155,7 @@ def add_comment(request):
         comment = Comment.objects.create(
             post=post,
             user=request.user,
-            content=comment_text,
-            created_at=now()
+            content=comment_text
         )
         comment_count = CommentLike.objects.filter(comment=comment).count()
         return JsonResponse({
@@ -164,17 +168,11 @@ def add_comment(request):
         })
     return JsonResponse({'success': False})
 
-@login_required
-def user_profile(request, id):
-    posts = Post.objects.filter(author=request.user).order_by('-created_at')
-    paginator = Paginator(posts, 5)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
-    return render(request, "network/user.html", {'data': page_obj})
 
 
 @login_required
 def logout_view(request):
+    """Log out the current user."""
     logout(request)
     return HttpResponseRedirect(reverse("index"))
 
@@ -182,6 +180,7 @@ def logout_view(request):
 @login_required
 @require_POST
 def create_post(request):
+    """Create a new post."""
     title = request.POST.get('title')
     content = request.POST.get('content')
     image = request.FILES.get('image')
@@ -206,13 +205,12 @@ def create_post(request):
 
 @login_required
 def create_post_page(request):
+    """Render the create post page."""
     return render(request, 'network/create_post.html')
 
 
-
-
-
 def profile(request, id):
+    """Display a user's profile and their posts."""
     profile_user = get_object_or_404(User, id=id)
 
     posts_list = Post.objects.filter(author=profile_user).order_by('-created_at')
@@ -235,6 +233,7 @@ def profile(request, id):
 
 @login_required
 def like_unlike_post(request):
+    """Toggle like on a post."""
     if request.method == 'POST':
         post_id = request.POST.get('post_id')
         post = get_object_or_404(Post, id=post_id)
@@ -254,6 +253,7 @@ def like_unlike_post(request):
 
 @login_required
 def posts_by_tag(request, tag):
+    """Display posts filtered by a specific tag."""
     posts = Post.objects.filter(tags__name=tag).order_by('-created_at')
     paginator = Paginator(posts, 5)
     page_number = request.GET.get("page")
@@ -268,6 +268,7 @@ def posts_by_tag(request, tag):
 @login_required
 @require_POST
 def like_comment(request):
+    """Toggle like on a comment."""
     comment_id = request.POST.get('comment_id')
     comment = get_object_or_404(Comment, id=comment_id)
     user = request.user
@@ -285,6 +286,7 @@ def like_comment(request):
 
 @login_required
 def share_post(request, post_id):
+    """Share a post via email."""
     if request.method == "POST":
         base_url = settings.BASE_URL
         post_url = f"{base_url}/post/{post_id}/"
